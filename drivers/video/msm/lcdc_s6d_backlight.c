@@ -56,88 +56,73 @@ extern int lcd_type;
 static int lcd_brightness = -1;
 
 struct brt_value brt_table_ktd[] = {
-		{ 255,	7 }, /* Max */
-		{ 244,	9 },
-		{ 233,	10 },
-		{ 222,	11 },
-		{ 211,	12 },
-		{ 200,	13 },
-		{ 189,	14 },
-		{ 178,	16 },
-		{ 166,	18 },
-		{ 154,	20 }, /* default */
-		{ 141,	22 },
-		{ 127,	23 },
-		{ 113,	24 },
-		{ 99,	25 },
-		{ 85,	26 },
-		{ 71,	27 },
-		{ 57,	28 },
-		{ 43,	29 },
-		{ 30,	31 }, /* Min */
-		{ 20,	31 }, /* Dimming */
-		{ 0,	32 }, /* Off */
+	  { 0,  5 }, // Off
+	  { 20, 1 }, // Dimming pulse 
+	  { MIN_BRIGHTNESS_VALUE,  1 }, // Min pulse 1(33-32) by HW
+	  { 44,  2 }, 
+	  { 52,  3 },  
+	  { 60,  4 }, 
+	  { 69,  5 }, 
+	  { 77,  6 }, 
+	  { 85,  7 }, 
+	  { 93,  8 },
+	  { 102,  9 },
+	  { 110,  10 }, 
+	  { 118,  11 },
+	  { 126,  12 },
+	  { 134,  13 },
+	  { 145,  14 }, // default pulse 19(33-14) by HW
+	  { 153,  15 }, 
+	  { 161,  16 }, 
+	  { 169,  17 }, 
+	  { 177,  18 }, 
+	  { 185,  19 }, 
+	  { 193,  20  },
+	  { 201,  21  },
+	  { 209,  22  },
+	  { 217,  23  },
+	  { 225,  24  },
+	  { 233,  25  },
+	  { 241,  26  },
+	  { MAX_BRIGHTNESS_VALUE,  27 }, // Max pulse 6(33-27) by HW
 };
-
-#if defined(CONFIG_MACH_AMAZING_CDMA)
-struct brt_value brt_table_aat[] = {
-#if defined CONFIG_MACH_AMAZING3G
-		{ 255,	11 }, /* Max 14 KTD  -330cd */
-#else
-		{ 255,  13 },
-#endif
-		{ 244,	14 },
-		{ 233,	15 },
-		{ 222,	16 },
-		{ 211,	17 },
-		{ 200,	18 },
-		{ 189,	19 },
-		{ 178,	20 },
-		{ 166,	21 },
-		{ 154,	22 }, /* Default 22 KTD - 190cd  */
-		{ 141,	23 },
-		{ 127,	24 },
-		{ 113,	25 },
-		{ 99,	26 },
-		{ 85,	27 },
-		{ 71,	28 },
-		{ 57,	29 },
-		{ 43,	30 },
-		{ 30,	31 }, /* Min */
-		{ 20,	31 }, /* Dimming */
-		{ 0,	32 }, /* Off */
+struct brt_value brt_table_shp[] = {
+	  { 0,  5 }, // Off
+	  { 20, 1 }, // Dimming pulse 
+	  { MIN_BRIGHTNESS_VALUE,  1 }, // Min pulse 1(33-32) by HW
+	  { 44,  2 }, 
+	  { 52,  3 },  
+	  { 60,  4 }, 
+	  { 69,  5 }, 
+	  { 77,  6 }, 
+	  { 85,  7 }, 
+	  { 93,  8 },
+	  { 102,  9 },
+	  { 110,  10 }, 
+	  { 118,  11 },
+	  { 126,  12 },
+	  { 134,  13 },
+	  { 145,  14 }, // default pulse 19(33-14) by HW
+	  { 153,  15 }, 
+	  { 161,  16 }, 
+	  { 169,  17 }, 
+	  { 177,  18 }, 
+	  { 185,  19 }, 
+	  { 193,  20  },
+	  { 201,  21  },
+	  { 209,  22  },
+	  { 217,  23  },
+	  { 225,  24  },
+	  { 233,  25  },
+	  { 241,  26  },
+	  //{ MAX_BRIGHTNESS_VALUE,  27 }, // Max pulse 6(33-27) by HW
+	  { MAX_BRIGHTNESS_VALUE,  31 }, // Max pulse 2(33-31) by HW
 };
-
-#else
-struct brt_value brt_table_aat[] = {
-		{ 255,	6 }, /* Max */
-		{ 244,	7 },
-		{ 233,	8 },
-		{ 222,	9 },
-		{ 211,	10 },
-		{ 200,	11 },
-		{ 189,	12 },
-		{ 178,	13 },
-		{ 166,	14 },
-		{ 154,	15 }, /* default */
-		{ 141,	16 },
-		{ 127,	18 },
-		{ 113,	20 },
-		{ 99,	21 },
-		{ 85,	23 },
-		{ 71,	24 },
-		{ 57,	26 },
-		{ 43,	28 },
-		{ 30,	30 }, /* Min */
-		{ 20,	30 }, /* Dimming */
-		{ 0,	32 }, /* Off */
-};
-#endif
 
 
 #define MAX_BRT_STAGE_KTD (int)(sizeof(brt_table_ktd)/sizeof(struct brt_value))
 #define MAX_BRT_STAGE_SHP (int)(sizeof(brt_table_shp)/sizeof(struct brt_value))
-#define MAX_BRT_STAGE_AAT (int)(sizeof(brt_table_aat)/sizeof(struct brt_value))
+
 static DEFINE_SPINLOCK(bl_ctrl_lock);
 
 void lcdc_s6d_set_brightness_by_ktd259(int level)
@@ -146,56 +131,58 @@ void lcdc_s6d_set_brightness_by_ktd259(int level)
 	int tune_level = 0;
 	int i;
 	int gpio_bl_ctrl;
+
 	gpio_bl_ctrl = 32;
 
 	spin_lock(&bl_ctrl_lock);
+
 	if (level > 0) {
 		if (level < MIN_BRIGHTNESS_VALUE) {
-			tune_level = AAT_DIMMING_VALUE; /* DIMMING */
+			tune_level = brt_table_shp[1].tune_level;
+		} else if (level == MAX_BRIGHTNESS_VALUE) {
+			tune_level = brt_table_shp[MAX_BRT_STAGE_SHP-1].tune_level;
 		} else {
-			for (i = 0; i < MAX_BRT_STAGE_AAT - 1; i++) {
-				if (level <= brt_table_aat[i].level
-					&& level > brt_table_aat[i+1].level) {
-					tune_level = brt_table_aat[i].tune_level;
+			for (i = 0; i < MAX_BRT_STAGE_SHP; i++) {
+				if (level <= brt_table_shp[i].level) {
+					tune_level = brt_table_shp[i].tune_level;
 					break;
 				}
 			}
 		}
-	} /*  BACKLIGHT is KTD model */
+	}
 
-	if (!tune_level) {
+	printk("Platform V:%d, Find V:%d\n",level, tune_level);
+
+	if(tune_level <= 0) {
 		gpio_set_value(gpio_bl_ctrl, 0);
 		mdelay(3);
 		lcd_brightness = tune_level;
 	} else {
-		if (unlikely(lcd_brightness < 0)) {
+		if(unlikely(lcd_brightness < 0)) {
+			// first time
 			int val = gpio_get_value(gpio_bl_ctrl);
 			if (val) {
 				lcd_brightness = 0;
-			gpio_set_value(gpio_bl_ctrl, 0);
-			mdelay(3);
-				printk(KERN_INFO "LCD Baklight init in boot time on kernel\n");
+				gpio_set_value(gpio_bl_ctrl, 0);
+				mdelay(3); // guaranteed for shutdown
 			}
-		}
-		if (!lcd_brightness) {
+		} 
+		if(!lcd_brightness) {
 			gpio_set_value(gpio_bl_ctrl, 1);
 			udelay(3);
 			lcd_brightness = MAX_BRIGHTNESS_IN_BLU;
 		}
-
-		pulse = (tune_level - lcd_brightness + MAX_BRIGHTNESS_IN_BLU)
-						% MAX_BRIGHTNESS_IN_BLU;
-
-		for (; pulse > 0; pulse--) {
+		//pulse = (lcd_brightness - tune_level + MAX_BRIGHTNESS_IN_BLU) % MAX_BRIGHTNESS_IN_BLU;
+		pulse = MAX_BRIGHTNESS_IN_BLU - tune_level + 1;
+		for(;pulse>0;pulse--) {
 			gpio_set_value(gpio_bl_ctrl, 0);
 			udelay(3);
 			gpio_set_value(gpio_bl_ctrl, 1);
 			udelay(3);
 		}
-
-		lcd_brightness = tune_level;
 	}
-	mdelay(1);
+	lcd_brightness = tune_level;
+
 	spin_unlock(&bl_ctrl_lock);
 }
 

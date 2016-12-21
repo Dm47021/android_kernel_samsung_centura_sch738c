@@ -60,3 +60,7 @@ ath6kl_usb-y += wmiconfig.o
 ath6kl_usb-$(CONFIG_NL80211_TESTMODE) += testmode.o
 
 ccflags-y += -D__CHECK_ENDIAN__
+# Country code setting
+ifeq ($(CONFIG_WLAN_COUNTRY_CODE),y)
+ccflags-y += -DGLOBALCONFIG_WLAN_COUNTRY_CODE
+endif

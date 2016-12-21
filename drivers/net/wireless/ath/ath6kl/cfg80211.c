@@ -283,8 +283,7 @@ static void ath6kl_set_key_mgmt(struct ath6kl_vif *vif, u32 key_mgmt)
 	}
 }
 
-/*static bool ath6kl_cfg80211_ready(struct ath6kl_vif *vif) */
-bool ath6kl_cfg80211_ready(struct ath6kl_vif *vif)
+static bool ath6kl_cfg80211_ready(struct ath6kl_vif *vif)
 {
 	struct ath6kl *ar = vif->ar;
 
@@ -1184,7 +1183,7 @@ static int ath6kl_cfg80211_add_key(struct wiphy *wiphy, struct net_device *ndev,
 
 	if (vif->nw_type == AP_NETWORK && !pairwise &&
 	    (key_type == TKIP_CRYPT || key_type == AES_CRYPT ||
-	     key_type == WAPI_CRYPT)) {
+	     key_type == WAPI_CRYPT) && params) {
 		ar->ap_mode_bkey.valid = true;
 		ar->ap_mode_bkey.key_index = key_index;
 		ar->ap_mode_bkey.key_type = key_type;
@@ -2059,14 +2058,6 @@ static int ath6kl_wow_sta(struct ath6kl *ar, struct ath6kl_vif *vif)
 			ath6kl_err("failed to add WOW SSDP pattern\n");
 			return ret;
 		}
-		ret = ath6kl_wmi_add_wow_pattern_cmd(ar->wmi,
-				vif->fw_vif_idx, WOW_LIST_ID,
-				sizeof(discvr_ssdp_pattern), discvr_offset,
-				discvr_ssdp_pattern, discvr_ssdp_mask);
-		if (ret) {
-			ath6kl_err("failed to add WOW SSDP pattern\n");
-			return ret;
-		}
 	}
 
 	return 0;
@@ -2152,7 +2143,7 @@ static int ath6kl_wow_suspend(struct ath6kl *ar, struct cfg80211_wowlan *wow)
 {
 	struct in_device *in_dev;
 	struct in_ifaddr *ifa;
-	struct ath6kl_vif *vif = NULL;
+	struct ath6kl_vif *vif;
 	int ret;
 	u32 filter = 0;
 	u16 i, bmiss_time;
@@ -2426,6 +2417,16 @@ int ath6kl_cfg80211_suspend(struct ath6kl *ar,
 
 		/* Flush all non control pkts in TX path */
 		ath6kl_tx_data_cleanup(ar);
+
+		vif = ath6kl_vif_first(ar);
+		if (!vif)
+			return -EIO;
+
+		ret = ath6kl_wmi_mcast_filter_cmd(vif->ar->wmi, vif->fw_vif_idx,
+							false);
+		if (ret)
+			return ret;
+
 		prev_state = ar->state;
 		ret = ath6kl_wow_suspend(ar, wow);
 		if (ret) {
@@ -2492,6 +2493,7 @@ int ath6kl_cfg80211_suspend(struct ath6kl *ar,
 int ath6kl_cfg80211_resume(struct ath6kl *ar)
 {
 	int ret;
+	struct ath6kl_vif *vif;
 
 	switch (ar->state) {
 	case  ATH6KL_STATE_WOW:
@@ -2502,6 +2504,16 @@ int ath6kl_cfg80211_resume(struct ath6kl *ar)
 			ath6kl_warn("wow mode resume failed: %d\n", ret);
 			return ret;
 		}
+
+		vif = ath6kl_vif_first(ar);
+		if (!vif)
+			return -EIO;
+
+		ret = ath6kl_wmi_mcast_filter_cmd(vif->ar->wmi, vif->fw_vif_idx,
+									true);
+
+		if (ret)
+			return ret;
 
 		break;
 
@@ -2935,14 +2947,14 @@ void ath6kl_cfg80211_sta_bmiss_enhance(struct ath6kl_vif *vif, bool enable)
 {
 	int err;
 
-	if (!test_bit(ATH6KL_FW_CAPABILITY_BMISS_ENHANCE,
-		      vif->ar->fw_capabilities))
-		return;
-
 	if (WARN_ON(!test_bit(WMI_READY, &vif->ar->flag)))
 		return;
 
 	if (vif->nw_type != INFRA_NETWORK)
+		return;
+
+	if (!test_bit(ATH6KL_FW_CAPABILITY_BMISS_ENHANCE,
+		      vif->ar->fw_capabilities))
 		return;
 
 	ath6kl_dbg(ATH6KL_DBG_WLAN_CFG, "%s fw bmiss enhance\n",
@@ -3716,7 +3728,7 @@ struct net_device *ath6kl_interface_add(struct ath6kl *ar, char *name,
 	if (fw_vif_idx != 0) {
 		ndev->dev_addr[0] = (ndev->dev_addr[0] ^ (1 << fw_vif_idx)) |
 				     0x2;
-		ndev->dev_addr[4] ^= 0x80;
+		ndev->dev_addr[4] = (ndev->dev_addr[4] ^ 0x80);
 	}
 
 	init_netdev(ndev);

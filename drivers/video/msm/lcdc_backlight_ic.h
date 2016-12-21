@@ -36,11 +36,6 @@ void backlight_ic_set_brightness(int level);
 #if defined(CONFIG_MACH_JENA)
 #define MAX_BRIGHTNESS_VALUE	255
 #define MIN_BRIGHTNESS_VALUE	30
-#define AAT_DIMMING_VALUE	    30
-#define MAX_BRIGHTNESS_IN_BLU	32
-#elif defined(CONFIG_MACH_KYLE)
-#define MAX_BRIGHTNESS_VALUE	255
-#define MIN_BRIGHTNESS_VALUE	31
 #define AAT_DIMMING_VALUE	    31
 #define MAX_BRIGHTNESS_IN_BLU	32
 #else
@@ -50,15 +45,9 @@ void backlight_ic_set_brightness(int level);
 #define MAX_BRIGHTNESS_IN_BLU	32
 #endif
 
-#if !defined(CONFIG_MACH_KYLE)
-extern int in_recovery_mode;
-#endif
-
-#if defined(CONFIG_MACH_AMAZING) || defined(CONFIG_MACH_TREBON)
-extern int board_hw_revision;
-#endif
-
 struct brt_value {
 	int level;			/* Platform setting values*/
 	int tune_level;			/* Chip Setting values*/
 };
+
+extern int board_hw_revision;

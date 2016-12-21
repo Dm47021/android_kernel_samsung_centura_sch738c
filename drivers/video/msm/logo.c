@@ -109,12 +109,6 @@ int load_565rle_image(char *filename, bool bf_supported)
 
 	max = fb_width(info) * fb_height(info);
 	ptr = data;
-	if (bf_supported && (info->node == 1 || info->node == 2)) {
-		err = -EPERM;
-		pr_err("%s:%d no info->creen_base on fb%d!\n",
-		       __func__, __LINE__, info->node);
-		goto err_logo_free_data;
-	}
 	bits = (unsigned short *)(info->screen_base);
 	while (count > 3) {
 		unsigned n = ptr[0];
@@ -203,11 +197,6 @@ EXPORT_SYMBOL(draw_rgb888_screen);
 int draw_rgb888_black_screen(void)
 {
 	struct fb_info *fb = registered_fb[0];
-	if (!fb) {
-		printk(KERN_WARNING "%s: Can not access framebuffer\n",
-			__func__);
-		return -ENODEV;
-	}
 	u32 height = fb->var.yres;
 	u32 line = fb->fix.line_length;
 	u32 i, j;
@@ -231,15 +220,11 @@ int draw_rgb888_black_screen(void)
 	}
 #endif
 
-/* #ifndef CONFIG_MACH_AMAZING */
-#if !defined(CONFIG_MACH_AMAZING) && !defined(CONFIG_MACH_AMAZING_CDMA) \
-		&& !defined(CONFIG_MACH_TREBON)
 	for (i = 0; i < height ; i++) {
 		for (j = 0; j < fb->var.xres; j++)
 			memset(fb->screen_base + i * line + j * 4 + 0,
 				0xff000000, 4);
 	}
-#endif
 	flush_cache_all();
 	outer_flush_all();
 

@@ -30,3 +30,7 @@ config ATH6KL_DEBUG
 	depends on ATH6KL
 	---help---
 	  Enables debug support
+config WLAN_COUNTRY_CODE
+	bool "Atheros WiFi Driver for Country Code"
+	default y
+

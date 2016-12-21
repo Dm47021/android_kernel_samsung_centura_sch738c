@@ -43,6 +43,7 @@
 static int spi_cs;
 static int spi_sclk;
 static int spi_sdi;
+static int spi_sdo;
 
 static int lcd_reset;
 
@@ -50,8 +51,8 @@ static int lcd_reset;
 #ifdef ESD_RECOVERY
 static unsigned int lcd_det_irq;
 static struct delayed_work lcd_reset_work;
-boolean irq_disabled = FALSE;
-boolean wa_first_irq = FALSE;
+static boolean irq_disabled = FALSE;
+static boolean wa_first_irq = FALSE;
 #endif
 
 struct disp_state_type {
@@ -68,8 +69,6 @@ static struct msm_panel_common_pdata *lcdc_trebon_pdata;
 
 static int lcd_prf;
 
-extern int board_hw_revision;
-
 static DEFINE_SEMAPHORE(backlight_sem);
 static DEFINE_MUTEX(spi_mutex);
 
@@ -79,33 +78,40 @@ static DEFINE_MUTEX(spi_mutex);
 #define RDID2			0xDB
 #define RDID3			0xDC
 
+#define SMD_PANEL	1
+#define AUO_PANEL	2
+static int lcd_id = -1;
+
 struct spi_cmd_desc {
 	int dlen;
 	char *payload;
 	int wait;
 };
 
-#if (CONFIG_MACH_TREBON_HWREV == 0x0) || (CONFIG_MACH_TREBON_HWREV == 0x1)
+/*
+* Common command of panel
+*/
+static char sleep_out_seq[1] = { 0x11 };
+static char disp_on_seq[1] = { 0x29 };
+static char disp_off_seq[1] = { 0x28 };
+static char sleep_in_seq[1] = { 0x10 };
+static char sw_reset_seq[1] = { 0x01 };
 
+/*
+* Operating Sequence for SMD Panel
+*/
 static char set_open_password[3] = {
 	0xEF,
 	0x74, 0x20
 };
 
-#if 0 /*jyhong_rev05*/
-static char power_setting_seq1[7] = {
-	0xF2,
-	0x00, 0x00, 0x00, 0x00, 0x0A,
-	0x00
-};
-#endif
-static char power_setting_seq2[10] = {
+static char power_setting_seq1[10] = {
 	0xB1,
 	0x01, 0x00, 0x22, 0x11, 0x73,
 	0x70, 0xEC, 0x15, 0x2C
 };
 
-static char power_setting_seq3[9] = {
+static char power_setting_seq2[9] = {
 	0xB2,
 	0x66, 0x06, 0xAA, 0x88, 0x88,
 	0x08, 0x08, 0x03
@@ -158,37 +164,37 @@ static char init_seq6[2] = {
 static char gamma_set_seq1[35] = {
 	/* Blue gamma */
 	0xE0,
-	0x4B, 0x49, 0x47, 0x11, 0x0B,
-	0x02, 0x3C, 0x36, 0x06, 0x0E,
-	0x11, 0x15, 0x19, 0x17, 0x18,
-	0x10, 0x17, 0x33, 0x33, 0x33,
-	0x11, 0x0C, 0x03, 0x2F, 0x2F,
-	0x07, 0x0F, 0x11, 0x16, 0x18,
-	0x17, 0x17, 0x0F, 0x16
+	0x4B, 0x49, 0x48, 0x12, 0x0C,
+	0x02, 0x3D, 0x37, 0x06, 0x0E,
+	0x0F, 0x14, 0x17, 0x16, 0x16,
+	0x10, 0x1E, 0x33, 0x33, 0x34,
+	0x11, 0x0C, 0x03, 0x31, 0x31,
+	0x07, 0x0E, 0x10, 0x14, 0x16,
+	0x15, 0x16, 0x11, 0x1E
 };
 
 static char gamma_set_seq2[35] = {
 	/* Green gamma */
 	0xE1,
-	0x1D, 0x24, 0x2A, 0x0C, 0x07,
-	0x03, 0x31, 0x32, 0x08, 0x0F,
-	0x12, 0x17, 0x1B, 0x18, 0x19,
-	0x14, 0x19, 0x02, 0x0C, 0x12,
-	0x09, 0x09, 0x00, 0x20, 0x2E,
-	0x08, 0x0F, 0x12, 0x18, 0x19,
-	0x18, 0x18, 0x14, 0x1A
+	0x1D, 0x24, 0x2B, 0x0D, 0x08,
+	0x03, 0x32, 0x33, 0x08, 0x0F,
+	0x10, 0x16, 0x18, 0x17, 0x18,
+	0x14, 0x1C, 0x02, 0x0C, 0x13,
+	0x09, 0x09, 0x00, 0x22, 0x30,
+	0x08, 0x0E, 0x11, 0x16, 0x18,
+	0x17, 0x17, 0x14, 0x1B
 };
 
 static char gamma_set_seq3[35] = {
 	/* Red gamma */
 	0xE2,
-	0x29, 0x2A, 0x2B, 0x0D, 0x0B,
-	0x03, 0x2D, 0x34, 0x07, 0x0D,
-	0x12, 0x18, 0x1A, 0x18, 0x19,
-	0x13, 0x18, 0x0F, 0x12, 0x14,
-	0x0A, 0x09, 0x01, 0x1D, 0x2B,
-	0x07, 0x0C, 0x12, 0x17, 0x1A,
-	0x18, 0x18, 0x13, 0x18
+	0x29, 0x2A, 0x2C, 0x0E, 0x0C,
+	0x03, 0x2E, 0x34, 0x07, 0x0C,
+	0x10, 0x16, 0x18, 0x17, 0x18,
+	0x13, 0x18, 0x0F, 0x12, 0x15,
+	0x0A, 0x09, 0x01, 0x1E, 0x2D,
+	0x07, 0x0C, 0x11, 0x16, 0x18,
+	0x17, 0x17, 0x12, 0x18
 };
 
 static char set_close_password[3] = {
@@ -201,16 +207,10 @@ static char deep_standby_en[2] = {
 	0x01
 };
 
-static char sleep_in_seq[1] = { 0x10 };
-static char sleep_out_seq[1] = { 0x11 };
-static char disp_on_seq[1] = { 0x29 };
-static char disp_off_seq[1] = { 0x28 };
-
 static struct spi_cmd_desc display_on_cmds[] = {
 	{sizeof(set_open_password), set_open_password, 0},
-/*	{sizeof(power_setting_seq1), power_setting_seq1, 0}, *//*jyhong_rev05*/
+	{sizeof(power_setting_seq1), power_setting_seq1, 0},
 	{sizeof(power_setting_seq2), power_setting_seq2, 0},
-	{sizeof(power_setting_seq3), power_setting_seq3, 0},
 
 	{sizeof(init_seq1), init_seq1, 0},
 	{sizeof(init_seq2), init_seq2, 0},
@@ -240,191 +240,6 @@ static struct spi_cmd_desc display_standby_in_cmds[] = {
 static struct spi_cmd_desc sw_rdy_cmds[] = {
 	{sizeof(sleep_out_seq), sleep_out_seq, 0},
 };
-#else
-static char power_setting_seq1[3] = {
-	0xC0,
-	0x18, 0x19
-};
-
-static char power_setting_seq2[2] = {
-	0xC1,
-	0x04
-};
-
-static char power_setting_seq3[2] = {
-	0xC2,
-	0x33
-};
-
-static char power_setting_seq4[3] = {
-	0xC5,
-	0x00, 0x40
-};
-
-static char init_seq1_1[5] = {
-	0x2A,
-	0x00, 0x00, 0x01, 0x3F
-};
-
-static char init_seq1_2[5] = {
-	0x28,
-	0x00, 0x00, 0x01, 0xDF
-};
-
-static char init_seq1_3[2] = {
-	0x36,
-	0x08
-};
-
-static char init_seq1_4[2] = {
-	0x3A,
-	0x66
-};
-
-static char init_seq2_1[3] = {
-	0xB1,
-	0xA0, 0x11
-};
-
-static char init_seq2_2[2] = {
-	0xB4,
-	0x00
-};
-
-static char init_seq2_3[5] = {
-	0xB5,
-	0x02, 0x02, 0x1C, 0x18
-};
-
-static char init_seq2_4[4] = {
-	0xB6,
-	0x30, 0x42, 0x3B
-};
-
-static char init_seq2_5[2] = {
-	0xB7,
-	0xC7
-};
-
-static char init_seq3_1[9] = {
-	0xF1,
-	0x36, 0x04, 0x00, 0x3C, 0x0F,
-	0x0F, 0xA4, 0x02
-};
-
-static char init_seq3_2[9] = {
-	0xF2,
-	0x1A, 0xA3, 0x12, 0x02, 0x82,
-	0x02, 0xFF, 0x02
-};
-
-static char init_seq3_3[1] = { 0x13 };
-
-static char gamma_set_seq1[16] = {
-	0xE0,
-	0x1F, 0x26, 0x24, 0x0F, 0x0E,
-	0x0D, 0x57, 0x87, 0x49, 0x0B,
-	0x17, 0x07, 0x0C, 0x0B, 0x00
-};
-
-static char gamma_set_seq2[16] = {
-	0xE1,
-	0x1F, 0x39, 0x31, 0x09, 0x0A,
-	0x01, 0x41, 0x32, 0x33, 0x04,
-	0x0D, 0x03, 0x23, 0x1F, 0x00
-};
-
-static char gamma_set_seq3[17] = {
-	0xE2,
-	0x00, 0x09, 0x09, 0x09, 0x0A,
-	0x0A, 0x0A, 0x0A, 0x0A, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00
-};
-
-static char gamma_set_seq4[65] = {
-	0xE3,
-	0x00, 0x00, 0x00, 0x00, 0x07,
-	0x07, 0x07, 0x07, 0x07, 0x07,
-	0x07, 0x07, 0x07, 0x07, 0x07,
-	0x07, 0x07, 0x07, 0x07, 0x07,
-	0x07, 0x07, 0x07, 0x07, 0x07,
-	0x07, 0x07, 0x07, 0x07, 0x07,
-	0x07, 0x07, 0x07, 0x07, 0x07,
-	0x07, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00
-};
-
-static char ifmode_set[2] = {
-	/*
-	 * DotClock	:Rising Edge
-	 * Enable	:High Active
-	 * HSYNC	:Low Active
-	 * VSYNC	:Low Active
-	 * 3-wire mode
-	*/
-	0xB0,
-	0x8C
-};
-static char ifmode_set2[2] = {
-	0xFB,
-	0x04
-};
-
-
-static char sleep_in_seq[1] = { 0x10 };
-static char sleep_out_seq[1] = { 0x11 };
-static char disp_on_seq[1] = { 0x29 };
-static char disp_off_seq[1] = { 0x28 };
-static char sw_reset_seq[1] = { 0x01 };
-
-static struct spi_cmd_desc display_on_cmds[] = {
-	{sizeof(power_setting_seq1), power_setting_seq1, 0},
-	{sizeof(power_setting_seq2), power_setting_seq2, 0},
-	{sizeof(power_setting_seq3), power_setting_seq3, 0},
-	{sizeof(power_setting_seq4), power_setting_seq4, 0},
-
-	{sizeof(init_seq1_1), init_seq1_1, 0},
-	{sizeof(init_seq1_2), init_seq1_2, 0},
-	{sizeof(init_seq1_3), init_seq1_3, 0},
-	{sizeof(init_seq1_4), init_seq1_4, 0},
-	{sizeof(init_seq2_1), init_seq2_1, 0},
-	{sizeof(init_seq2_2), init_seq2_2, 0},
-	{sizeof(init_seq2_3), init_seq2_3, 0},
-	{sizeof(init_seq2_4), init_seq2_4, 0},
-	{sizeof(init_seq2_5), init_seq2_5, 0},
-	{sizeof(init_seq3_1), init_seq3_1, 0},
-	{sizeof(init_seq3_2), init_seq3_2, 0},
-	{sizeof(init_seq3_3), init_seq3_3, 0},
-
-	{sizeof(gamma_set_seq1), gamma_set_seq1, 0},
-	{sizeof(gamma_set_seq2), gamma_set_seq2, 0},
-	{sizeof(gamma_set_seq3), gamma_set_seq3, 0},
-	{sizeof(gamma_set_seq4), gamma_set_seq4, 0},
-
-	{sizeof(sleep_out_seq), sleep_out_seq, 120},
-	{sizeof(disp_on_seq), disp_on_seq, 40},
-};
-
-static struct spi_cmd_desc display_off_cmds[] = {
-	{sizeof(disp_off_seq), disp_off_seq, 40},
-	{sizeof(sleep_in_seq), sleep_in_seq, 120},
-};
-
-static struct spi_cmd_desc display_standby_in_cmds[] = {
-	{sizeof(disp_off_seq), disp_off_seq, 0},
-};
-
-static struct spi_cmd_desc sw_rdy_cmds[] = {
-	{sizeof(sw_reset_seq), sw_reset_seq, 10},
-	{sizeof(ifmode_set2), ifmode_set2, 0},
-	{sizeof(ifmode_set), ifmode_set, 0},
-};
-#endif
 
 static void read_ldi_register(u8 addr, u8 *buf, int count)
 {
@@ -458,8 +273,7 @@ static void read_ldi_register(u8 addr, u8 *buf, int count)
 		udelay(DEFAULT_USLEEP);
 	}
 
-	/* swith input */
-	gpio_direction_input(spi_sdi);
+	gpio_set_value(spi_sdi, 0);
 
 	if (count > 1) {
 		/* dummy clock cycle */
@@ -472,32 +286,28 @@ static void read_ldi_register(u8 addr, u8 *buf, int count)
 	/* Read Parameter */
 	if (count > 0) {
 		for (j = 0; j < count; j++) {
-
 			for (i = 7; i >= 0; i--) {
 				gpio_set_value(spi_sclk, 0);
 				udelay(DEFAULT_USLEEP);
 				/* read bit */
-				if (gpio_get_value(spi_sdi))
+				if (gpio_get_value(spi_sdo))
 					buf[j] |= (0x1<<i);
 				else
 					buf[j] &= ~(0x1<<i);
+
 				gpio_set_value(spi_sclk, 1);
 				udelay(DEFAULT_USLEEP);
 			}
 		}
 	}
 
-	gpio_set_value(spi_cs, 1);
 	udelay(DEFAULT_USLEEP);
-
-	/* switch output */
-	gpio_direction_output(spi_sdi, 0);
+	gpio_set_value(spi_cs, 1);
 }
 
 static void spi_cmds_tx(struct spi_cmd_desc *desc, int cnt)
 {
 	long i, j, p;
-	unsigned long irqflags;
 
 	mutex_lock(&spi_mutex);
 	for (p = 0; p < cnt; p++) {
@@ -569,7 +379,7 @@ tx_done:
 	mutex_unlock(&spi_mutex);
 }
 
-static void read_lcd_id()
+static void read_lcd_id(void)
 {
 	unsigned char data[4] = {0, };
 
@@ -577,7 +387,17 @@ static void read_lcd_id()
 	read_ldi_register(RDID2, &data[1], 1);
 	read_ldi_register(RDID3, &data[2], 1);
 
-	printk("ldi mtpdata: %x %x %x\n", data[0], data[1], data[2]);
+	if ((data[0] == 0x6B) && (data[1] == 0x88) && (data[2] == 0x40)) {
+		lcd_id = SMD_PANEL;
+	} else if ((data[0] == 0x5B)
+				&& (data[1] == 0x48) && (data[2] == 0x11)) {
+		lcd_id = AUO_PANEL;
+	} else {
+		DPRINT("Fail to read the panel id\n");
+		lcd_id = SMD_PANEL;
+	}
+
+	DPRINT("ldi mtpdata: %x %x %x\n", data[0], data[1], data[2]);
 }
 
 static void spi_init(void)
@@ -697,15 +517,13 @@ static void trebon_disp_powerdown(void)
 	gpio_set_value(lcd_reset, 0);
 
 	trebon_vreg_config(VREG_DISABLE);
-	msleep(1);
+	usleep(1000);
 
 	disp_state.disp_powered_up = FALSE;
 }
 
 static void trebon_disp_on(void)
 {
-	int i;
-
 	DPRINT("start %s\n", __func__);
 
 	if (disp_state.disp_powered_up && !disp_state.display_on) {
@@ -761,10 +579,6 @@ static int lcdc_trebon_panel_standby_out(struct platform_device *pdev)
 		usleep(10000);
 
 		trebon_disp_reset(0);
-/*
-		trebon_disp_reset(1);
-
-		spi_init();*/	/* LCD needs SPI */
 
 		spi_cmds_tx(sw_rdy_cmds, ARRAY_SIZE(sw_rdy_cmds));
 /*		msleep(10);*/
@@ -782,105 +596,30 @@ static int lcdc_trebon_panel_on(struct platform_device *pdev)
 	DPRINT("start %s\n", __func__);
 
 #ifdef USE_STANDBY_MODE
-	if (disp_state.standby) {
+	if (disp_state.standby)
 		lcdc_trebon_panel_standby_out(pdev);
-	} else {
 #endif
-	if (!disp_state.disp_initialized) {
-#ifdef ESD_RECOVERY
-		if (irq_disabled) {
-			enable_irq(lcd_det_irq);
-			irq_disabled = FALSE;
-		}
-#endif
-		/* Configure reset GPIO that drives DAC */
-		lcdc_trebon_pdata->panel_config_gpio(1);
 
-	/*signal_timing*/
-		spi_standby();
-/*		msleep(10);*/
-		usleep(10000);
-
-		trebon_disp_powerup();
-/*
-		trebon_disp_powerup();
-
-		spi_init();	*//* LCD needs SPI */
-
-		spi_cmds_tx(sw_rdy_cmds, ARRAY_SIZE(sw_rdy_cmds));
-/*		msleep(10);*/
-		usleep(10000);
-
-		read_lcd_id();
-
-		trebon_disp_on();
-
-		disp_state.disp_initialized = TRUE;
-	}
-#ifdef USE_STANDBY_MODE
-	}
-#endif
 	return 0;
 }
 
 static int lcdc_trebon_panel_off(struct platform_device *pdev)
 {
-#ifdef USE_STANDBY_MODE
-	lcdc_trebon_panel_standby_in(pdev);
-	disp_state.standby = TRUE;
-#else
 	DPRINT("start %s\n", __func__);
 
-	if (disp_state.disp_powered_up && disp_state.display_on) {
-#ifdef ESD_RECOVERY
-		disable_irq_nosync(lcd_det_irq);
-		irq_disabled = TRUE;
-#endif
-		spi_cmds_tx(display_off_cmds, ARRAY_SIZE(display_off_cmds));
-		lcdc_trebon_pdata->panel_config_gpio(0);
-		disp_state.display_on = FALSE;
-		disp_state.disp_initialized = FALSE;
-		trebon_disp_powerdown();
-		lcd_prf = 0;
-	}
-#endif
+	lcdc_trebon_panel_standby_in(pdev);
+
+	disp_state.standby = TRUE;
 	return 0;
 }
 
 static void lcdc_trebon_set_backlight(struct msm_fb_data_type *mfd)
 {
 	int bl_value = mfd->bl_level;
-	static int lockup_count;
 
-	up(&backlight_sem);
-	DPRINT("[BACLKIGHT] : %d\n", bl_value);
-	if (!bl_value) {
-		/*  Turn off Backlight, don't check disp_initialized value */
-		lcd_prf = 1;
-
-	} else {
-		if (lcd_prf)
-			return;
-
-		while (!disp_state.disp_initialized) {
-			msleep(100);
-			lockup_count++;
-
-			if (lockup_count > 50) {
-				printk(KERN_ERR "Prevent infinite loop(wait for 5s)\n");
-				printk(KERN_ERR "LCD can't initialize with in %d ms\n"
-					, lockup_count*100);
-				lockup_count = 0;
-
-				down(&backlight_sem);
-				return;
-			}
-		}
-	}
+	printk("[BACKLIGHT] : %d\n",bl_value);
 
 	backlight_ic_set_brightness(bl_value);
-
-	down(&backlight_sem);
 }
 
 #ifdef ESD_RECOVERY
@@ -901,29 +640,13 @@ static void lcdc_dsip_reset_work(struct work_struct *work_ptr)
 	}
 
 	DPRINT("lcd reset\n");
-#if 0
 
-	disp_state.display_on = FALSE;
-	disp_state.disp_initialized = FALSE;
-	disp_state.disp_powered_up = FALSE;
-
-	trebon_disp_reset(1);
-
-	spi_init();	/* LCD needs SPI */
-
-	spi_cmds_tx(sw_rdy_cmds, ARRAY_SIZE(sw_rdy_cmds));
-	msleep(10);
-
-	read_lcd_id();
-
-	trebon_disp_on();
-
-	disp_state.disp_initialized = TRUE;
-#else
 	lcdc_trebon_panel_off(NULL);
+
 	trebon_disp_reset(0);
+
 	lcdc_trebon_panel_on(NULL);
-#endif
+
 }
 #endif
 
@@ -943,15 +666,11 @@ static ssize_t trebon_lcdtype_show(struct device *dev,
 			struct device_attribute *attr, char *buf)
 {
 	char temp[20];
-#if (CONFIG_MACH_TREBON_HWREV == 0x0) || (CONFIG_MACH_TREBON_HWREV == 0x1)
-/*	sprintf(temp, "SMD_LMS635DF04\n");*/
-	DPRINT("SMD_LMS635DF04\n");
-#else
-/*	sprintf(temp, "SEC_ILI9486\n");*/
-	DPRINT("SEC_ILI9486\n");
-#endif
-/*	strcat(buf, temp);
-	return strlen(buf);*/
+	DPRINT("start %s\n", __func__);
+
+	snprintf(temp, sizeof(temp), "SMD_LMS365DF04\n");
+	DPRINT("%s : SMD_LMS365DF04\n", __func__);
+
 	strncat(buf, temp, sizeof(temp));
 	return strnlen(buf, sizeof(temp));
 }
@@ -968,15 +687,12 @@ static int __devinit trebon_disp_probe(struct platform_device *pdev)
 	int ret;
 	int i;
 	struct lcd_device *lcd_device;
+
 	if (pdev->id == 0) {
 		disp_state.disp_initialized = TRUE; /*signal_timing*/
 		disp_state.disp_powered_up = TRUE;
 		disp_state.display_on = TRUE;
-/*
-		disp_state.disp_initialized = FALSE;
-		disp_state.disp_powered_up = FALSE;
-		disp_state.display_on = FALSE;
-*/
+
 #ifdef USE_STANDBY_MODE
 		disp_state.standby = FALSE;
 #endif
@@ -984,7 +700,9 @@ static int __devinit trebon_disp_probe(struct platform_device *pdev)
 		spi_sclk = *(lcdc_trebon_pdata->gpio_num);
 		spi_cs   = *(lcdc_trebon_pdata->gpio_num + 1);
 		spi_sdi  = *(lcdc_trebon_pdata->gpio_num + 2);
-		lcd_reset = *(lcdc_trebon_pdata->gpio_num + 3);
+		spi_sdo  = *(lcdc_trebon_pdata->gpio_num + 3);
+		lcd_reset = *(lcdc_trebon_pdata->gpio_num + 4);
+		gpio_direction_input(spi_sdo);
 
 		spi_standby();	/*spi_init();*//*cs: active low*/
 
@@ -1080,7 +798,7 @@ static struct platform_device this_device = {
  #define LCDC_BPP		18
 #endif
 
-#if 0
+#if defined(LCDC_CLOCK_SETTING)
 #define LCDC_PCLK	((LCDC_FB_XRES + LCDC_HBP + LCDC_HPW + LCDC_HFP) \
 			* (LCDC_FB_YRES + LCDC_VBP + LCDC_VPW + LCDC_VFP) * 60)
 #else
@@ -1099,13 +817,14 @@ static int __init lcdc_trebon_panel_init(void)
 {
 	int ret;
 	struct msm_panel_info *pinfo;
-#ifdef CONFIG_FB_MSM_TRY_MDDI_CATCH_LCDC_PRISM
-	ret = msm_fb_detect_client("lcdc_trebon_hvga");
+
+/*#ifdef CONFIG_FB_MSM_TRY_MDDI_CATCH_LCDC_PRISM*/
+	ret = msm_fb_detect_client("lcdc_trebon_smd_hvga");
 	if (ret) {
 		DPRINT("%s:msm_fb_detect_client failed!\n", __func__);
 		return 0;
 	}
-#endif
+/*#endif*/
 
 	ret = platform_driver_register(&this_driver);
 	if (ret)
@@ -1140,6 +859,9 @@ static int __init lcdc_trebon_panel_init(void)
 			 __func__);
 		platform_driver_unregister(&this_driver);
 	}
+	/*
+	* Read panel id and update the function for each panel
+	*/
 	return ret;
 }
 

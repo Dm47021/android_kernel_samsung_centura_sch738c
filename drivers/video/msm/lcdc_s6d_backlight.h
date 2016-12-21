@@ -53,13 +53,8 @@ void lcdc_s6d_set_brightness_by_aat1401(int level);
 //#define GPIO_BL_CTRL	32 //26
 
 #define MAX_BRIGHTNESS_VALUE	255
-#if defined(CONFIG_MACH_AMAZING_CDMA)
-#define MIN_BRIGHTNESS_VALUE	31
-#define AAT_DIMMING_VALUE		31
-#else
 #define MIN_BRIGHTNESS_VALUE	30
 #define AAT_DIMMING_VALUE		29
-#endif
 #define KTD_DIMMING_VALUE		1
 #define MAX_BRIGHTNESS_IN_BLU	32 // backlight-IC MAX VALUE
 

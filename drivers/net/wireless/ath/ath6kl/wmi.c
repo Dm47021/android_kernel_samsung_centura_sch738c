@@ -23,6 +23,7 @@
 #include "../regd_common.h"
 #include "btc.h"
 #include "debugfs_pri.h"
+#include "cfg80211.h"
 
 static int ath6kl_wmi_sync_point(struct wmi *wmi, u8 if_idx);
 
@@ -1870,7 +1871,7 @@ int ath6kl_wmi_beginscan_cmd(struct wmi *wmi, u8 if_idx,
 {
 	struct sk_buff *skb;
 	struct wmi_begin_scan_cmd *sc;
-	unsigned int size;
+	s8 size;
 	int i, band, ret;
 	struct ath6kl *ar = wmi->parent_dev;
 	int num_rates;
@@ -3869,7 +3870,7 @@ int ath6kl_wmi_control_rx(struct wmi *wmi, struct sk_buff *skb)
 		ret = ath6kl_wmi_tkip_micerr_event_rx(wmi, datap, len, vif);
 		break;
 	case WMI_BSSINFO_EVENTID:
-		/* ath6kl_dbg(ATH6KL_DBG_WMI, "WMI_BSSINFO_EVENTID\n"); */
+		ath6kl_dbg(ATH6KL_DBG_WMI, "WMI_BSSINFO_EVENTID\n");
 		ret = ath6kl_wmi_bssinfo_event_rx(wmi, datap, len, vif);
 		break;
 	case WMI_REGDOMAIN_EVENTID:

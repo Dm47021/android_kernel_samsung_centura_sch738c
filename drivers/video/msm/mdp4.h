@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,6 +25,9 @@ extern uint32 mdp_intr_mask;
 extern spinlock_t mdp_spin_lock;
 extern struct mdp4_statistic mdp4_stat;
 extern uint32 mdp4_extn_disp;
+extern char *mmss_cc_base;	/* mutimedia sub system clock control */
+extern u32 dbg_force_ov0_blt;
+extern u32 dbg_force_ov1_blt;
 
 #define MDP4_OVERLAYPROC0_BASE	0x10000
 #define MDP4_OVERLAYPROC1_BASE	0x18000
@@ -426,6 +429,7 @@ int mdp4_overlay_dtv_unset(struct msm_fb_data_type *mfd,
 			struct mdp4_overlay_pipe *pipe);
 void mdp4_dma_e_done_dtv(void);
 void mdp4_overlay_dtv_wait4vsync(void);
+void mdp4_dtv_base_swap(struct mdp4_overlay_pipe *pipe);
 #else
 static inline void mdp4_overlay_dtv_start(void)
 {
@@ -467,6 +471,10 @@ static inline void mdp4_dtv_overlay_blt_start(struct msm_fb_data_type *mfd)
 static inline void mdp4_dtv_overlay_blt_stop(struct msm_fb_data_type *mfd)
 {
 	return;
+}
+static inline void mdp4_dtv_base_swap(struct mdp4_overlay_pipe *pipe)
+{
+	/* empty */
 }
 #endif
 
@@ -687,6 +695,7 @@ void mdp4_overlay_dsi_video_vsync_push(struct msm_fb_data_type *mfd,
 void mdp4_dsi_cmd_overlay_restore(void);
 void mdp_dsi_cmd_overlay_suspend(void);
 #else
+#if 0
 static inline void mdp4_dsi_cmd_dma_busy_wait(struct msm_fb_data_type *mfd)
 {
 	/* empty */
@@ -695,6 +704,7 @@ static inline void mdp4_dsi_blt_dmap_busy_wait(struct msm_fb_data_type *mfd)
 {
 	/* empty */
 }
+#endif
 static inline void mdp4_overlay_dsi_video_start(void)
 {
 	/* empty */

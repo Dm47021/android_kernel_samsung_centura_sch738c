@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2011, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -29,7 +29,6 @@
 #include <linux/clk.h>
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
-#include <mach/clk.h>
 
 #include "msm_fb.h"
 
@@ -78,7 +77,7 @@ static int lcdc_off(struct platform_device *pdev)
 #ifndef CONFIG_MSM_BUS_SCALING
 	if (mfd->ebi1_clk) {
 		if (mdp_rev == MDP_REV_303) {
-			if (clk_set_min_rate(mfd->ebi1_clk, 0))
+			if (clk_set_rate(mfd->ebi1_clk, 0))
 				pr_err("%s: ebi1_lcdc_clk set rate failed\n",
 					__func__);
 		}
@@ -117,7 +116,7 @@ static int lcdc_on(struct platform_device *pdev)
 
 	if (mfd->ebi1_clk) {
 		if (mdp_rev == MDP_REV_303) {
-			if (clk_set_min_rate(mfd->ebi1_clk, 65000000))
+			if (clk_set_rate(mfd->ebi1_clk, 65000000))
 				pr_err("%s: ebi1_lcdc_clk set rate failed\n",
 					__func__);
 		} else {
@@ -127,28 +126,16 @@ static int lcdc_on(struct platform_device *pdev)
 	}
 
 #endif
-
 	mfd = platform_get_drvdata(pdev);
 
 	mfd->fbi->var.pixclock = clk_round_rate(pixel_mdp_clk,
 					mfd->fbi->var.pixclock);
-
-#if defined(CONFIG_MACH_TREBON) || defined(CONFIG_MACH_GEIM) \
-						|| defined(CONFIG_MACH_JENA) \
-						|| defined(CONFIG_MACH_AMAZING) \
-						|| defined(CONFIG_MACH_AMAZING_CDMA) \
-						|| defined(CONFIG_MACH_KYLE)
 	ret = clk_set_rate(pixel_mdp_clk, mfd->fbi->var.pixclock);
-
-	pr_err("%s:Trebon: set MDP LCDC pixel clock to %u\n",
-		__func__, mfd->fbi->var.pixclock);
-
 	if (ret) {
 		pr_err("%s: Can't set MDP LCDC pixel clock to rate %u\n",
 			__func__, mfd->fbi->var.pixclock);
 		goto out;
 	}
-#endif
 
 	clk_enable(pixel_mdp_clk);
 	clk_enable(pixel_lcdc_clk);
